@@ -8,6 +8,7 @@ from sklearn.externals import joblib
 from constants import DATA_DIR
 from constants import JSON_FILE
 from constants import SAVED_MODEL
+from constants import SAVED_SVM_PREDICTIONS
 from constants import TEST_DATA
 from utils import load_polygons
 from utils import polygon2size
@@ -52,6 +53,9 @@ if __name__ == '__main__':
         print('Loaded trained model')
 
     predictions = svm.predict(X_test)
+
+    with open(SAVED_SVM_PREDICTIONS, 'wb') as f:
+        joblib.dump(predictions, f)
 
     error = mean_squared_error(y_test, np.array(predictions, dtype=np.float).squeeze())
     print('MSE:', error)
