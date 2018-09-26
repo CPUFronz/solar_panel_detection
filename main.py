@@ -26,7 +26,7 @@ if __name__ == '__main__':
         print('Finished reading polygons, took{:5.2f}s'.format(time.time() - start_read_poly))
 
         start_read_files = time.time()
-        tif_files = glob.glob(DATA_DIR + '*.tif')[:10]
+        tif_files = glob.glob(DATA_DIR + '*.tif')
         X, y = create_examples(tif_files, polygons)
         X, X_test, y, y_test = conditioned_train_test_split(X, y, test_size=0.2, min_positive_size=0.4)
         X = np.array(X)
