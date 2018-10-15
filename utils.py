@@ -4,11 +4,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from collections import namedtuple
 from PIL import Image
+from osgeo import gdal
 
 from constants import IMG_SIZE_X
 from constants import IMG_SIZE_Y
-from constants import WINDOW_SIZE_X
-from constants import WINDOW_SIZE_Y
+from constants import SVM_WINDOW_SIZE_X
+from constants import SVM_WINDOW_SIZE_Y
+from constants import DATA_DIR_TRAIN
+from constants import YOLO_IMG_SIZE_X
+from constants import YOLO_IMG_SIZE_Y
 
 
 def load_polygons(json_file):
@@ -33,29 +37,6 @@ def load_polygons(json_file):
     return findings
 
 
-def create_examples(tif_files, polygons):
-    cnt = 0
-    X = []
-    y = []
-
-    for tif in tif_files:
-        pvs = []
-        for pv in polygons:
-            # only create a list of pvs for the current file, saves a lot of time
-            if os.path.basename(tif).replace('.tif', '') == pv.filename:
-                # append only if center is not _NaN_
-                if type(pv.center_x) != str or type(pv.center_y) != str:
-                    pvs.append(pv)
-
-        train_x, train_y = create_training_data_image(tif, pvs)
-        X.extend(train_x)
-        y.extend(train_y)
-        cnt += 1
-        print('Created trainig data: {0:3d}/{1:3d}'.format(cnt, len(tif_files)))
-
-    return X, y
-
-
 def polygon2size(points):
     x_min = IMG_SIZE_X
     y_min = IMG_SIZE_Y
@@ -78,31 +59,85 @@ def polygon2size(points):
     return x_max - x_min, y_max - y_min
 
 
-def highlight_pv(filename, pvs):
+def highlight_all_pvs(training_file):
+    with open(training_file, 'r') as f:
+        lines = f.readlines()
+
+    for line in lines:
+        splitted = line.strip().split(' ')
+        filename = splitted.pop(0)
+
+        img = Image.open(filename)
+        img_array = np.array(img)
+        plt.imshow(img_array)
+
+        for s in splitted:
+            coords = s.split(',')
+            rect_x, rect_y = calc_rectangle(x_min=coords[0], y_min=coords[1], x_max=coords[2], y_max=coords[3])
+            plt.plot(rect_x, rect_y, color='red')
+
+        plt.show()
+
+
+def highlight_pvs(filename, pvs):
     img = Image.open(filename)
     img_array = np.array(img)
 
     plt.imshow(img_array)
     for pv in pvs:
-        x = pv.center_x
-        y = pv.center_y
-        h = pv.height
-        w = pv.width
+        rect_x, rect_y = calc_rectangle(x=pv.center_x, y=pv.center_y, h=pv.height, w=pv.width)
+        plt.plot(rect_x, rect_y, color='red')
+
+    plt.show()
+
+
+def calc_rectangle(**kwargs):
+    if 'x_min' in kwargs and 'y_min' in kwargs and 'x_max' in kwargs and 'y_max' in kwargs:
+        x_min = int(kwargs['x_min'])
+        y_min = int(kwargs['y_min'])
+        x_max = int(kwargs['x_max'])
+        y_max = int(kwargs['y_max'])
+
+        A = (x_min, y_min)
+        B = (x_max, y_min)
+        C = (x_max, y_max)
+        D = (x_min, y_max)
+
+    elif 'x' in kwargs and 'y' in kwargs and 'w' in kwargs and 'h' in kwargs:
+        x = float(kwargs['x'])
+        y = float(kwargs['y'])
+        w = float(kwargs['w'])
+        h = float(kwargs['h'])
 
         A = (int(x - w/2), int(y - h/2))
         B = (int(x + w/2), A[1])
         C = (B[0], int(y + h/2))
         D = (A[0], C[1])
 
-        rect_x = [A[0], B[0], C[0], D[0], A[0]]
-        rect_y = [A[1], B[1], C[1], D[1], A[1]]
+    rect_x = [A[0], B[0], C[0], D[0], A[0]]
+    rect_y = [A[1], B[1], C[1], D[1], A[1]]
 
-        plt.plot(rect_x, rect_y, color='red')
-
-    plt.show()
+    return rect_x, rect_y
 
 
-def create_training_data_image(filename, pvs, window_x=WINDOW_SIZE_X, window_y=WINDOW_SIZE_Y):
+def split_tif(filename, outpath=DATA_DIR_TRAIN, step_x=YOLO_IMG_SIZE_X, step_y=YOLO_IMG_SIZE_Y, overwrite=False):
+    src_ds = gdal.Open(filename)
+    x_size = src_ds.RasterXSize
+    y_size = src_ds.RasterYSize
+
+    for x in range(0, x_size, step_x):
+        for y in range(0, y_size, step_y):
+            new_fn = outpath + os.path.splitext(os.path.basename(filename))[0] + '_{0:06d}_{1:06d}.tif'.format(x, y)
+
+            if os.path.exists(new_fn) and not overwrite:
+                continue
+            else:
+                print('Creating ' + os.path.basename(new_fn))
+                new_ds = gdal.Translate(new_fn, src_ds, srcWin=[x, y, step_x, step_y])
+                del new_ds
+
+
+def create_training_data_window(filename, pvs, window_x=SVM_WINDOW_SIZE_X, window_y=SVM_WINDOW_SIZE_Y):
     img = Image.open(filename)
     img_array = np.array(img)
 
@@ -113,10 +148,10 @@ def create_training_data_image(filename, pvs, window_x=WINDOW_SIZE_X, window_y=W
         print(('Input image doesn\'t have the right size'), filename)
         return
 
-    for x in range(0, IMG_SIZE_X, WINDOW_SIZE_X):
-        for y in range(0, IMG_SIZE_Y, WINDOW_SIZE_Y):
-            x_end = x + WINDOW_SIZE_X
-            y_end = y + WINDOW_SIZE_Y
+    for x in range(0, IMG_SIZE_X, SVM_WINDOW_SIZE_X):
+        for y in range(0, IMG_SIZE_Y, SVM_WINDOW_SIZE_Y):
+            x_end = x + SVM_WINDOW_SIZE_X
+            y_end = y + SVM_WINDOW_SIZE_Y
             X.append(img_array[x:x_end, y:y_end, :3])
 
             # target = [confidence, x, y, h, w]
@@ -124,8 +159,8 @@ def create_training_data_image(filename, pvs, window_x=WINDOW_SIZE_X, window_y=W
 
             for pv in pvs:
                 if x <= pv.center_x <= x_end and y <= pv.center_y <= y_end:
-                    x_relative = (pv.center_x - x) / WINDOW_SIZE_X
-                    y_relative = (pv.center_y - y) / WINDOW_SIZE_Y
+                    x_relative = (pv.center_x - x) / SVM_WINDOW_SIZE_X
+                    y_relative = (pv.center_y - y) / SVM_WINDOW_SIZE_Y
                     target = np.array([1, x_relative, y_relative, pv.height, pv.width], dtype=np.float32)
 
             Y.append(target)
@@ -133,55 +168,7 @@ def create_training_data_image(filename, pvs, window_x=WINDOW_SIZE_X, window_y=W
     return X, Y
 
 
-def conditioned_train_test_split(X, y, test_size, min_positive_size):
-    num_total = len(X)
-    num_test = int(num_total * test_size)
-    num_test_positive = int(num_test * min_positive_size)
-
-    perm = np.random.permutation(num_total)
-    X = [X[i] for i in perm]
-    y = [y[i] for i in perm]
-
-    X_train = []
-    y_train = []
-    X_test = []
-    y_test = []
-    indices = []
-    for i in range(len(X)):
-        if y[i][0] == 1:
-            X_test.append(X[i])
-            y_test.append(y[i])
-            indices.append((i))
-        if len(y_test) >= num_test_positive:
-            break
-
-    num_test_positive_actual = len(y_test)
-    if num_test_positive_actual <= num_test_positive:
-        num_train_positive = int((1 - min_positive_size) * num_test_positive_actual)
-        for i in reversed(range(num_train_positive)):
-            X_train.append(X_test.pop(i))
-            y_train.append(y_test.pop(i))
-            del indices[i]
-
-    for idx in reversed(indices):
-        del X[idx]
-        del y[idx]
-
-    num_test = int(len(y_test) / min_positive_size)
-    num_train = int(num_test / test_size)
-
-    while len(X_test) <= num_test:
-        idx = np.random.randint(len(X))
-        X_test.append(X[idx])
-        y_test.append(y[idx])
-
-        del X[idx]
-        del y[idx]
-
-    # pruning negative training examples
-    while len(X_train) <= num_train:
-        idx = np.random.randint(len(X))
-        X_train.append(X[idx])
-        y_train.append(y[idx])
-
-    return X_train, X_test, y_train, y_test
+if __name__ == '__main__':
+#    highlight_pvs('/home/franz/workspace/solar_panel_detection/train.txt')
+#    highlight_pvs('/home/franz/Schreibtisch/train.txt')
+    split_tif('/media/franz/Volume1/solar_panel_detector_data/production/Vienna_2017.tif')
