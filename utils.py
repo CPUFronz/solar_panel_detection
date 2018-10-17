@@ -10,7 +10,7 @@ from constants import IMG_SIZE_X
 from constants import IMG_SIZE_Y
 from constants import SVM_WINDOW_SIZE_X
 from constants import SVM_WINDOW_SIZE_Y
-from constants import DATA_DIR_TRAIN
+from constants import DATA_DIR_USE
 from constants import YOLO_IMG_SIZE_X
 from constants import YOLO_IMG_SIZE_Y
 
@@ -120,14 +120,14 @@ def calc_rectangle(**kwargs):
     return rect_x, rect_y
 
 
-def split_tif(filename, outpath=DATA_DIR_TRAIN, step_x=YOLO_IMG_SIZE_X, step_y=YOLO_IMG_SIZE_Y, overwrite=False):
+def split_tif(filename, out_path=DATA_DIR_USE, step_x=YOLO_IMG_SIZE_X, step_y=YOLO_IMG_SIZE_Y, overwrite=False):
     src_ds = gdal.Open(filename)
     x_size = src_ds.RasterXSize
     y_size = src_ds.RasterYSize
 
     for x in range(0, x_size, step_x):
         for y in range(0, y_size, step_y):
-            new_fn = outpath + os.path.splitext(os.path.basename(filename))[0] + '_{0:06d}_{1:06d}.tif'.format(x, y)
+            new_fn = out_path + os.path.splitext(os.path.basename(filename))[0] + '_{0:06d}_{1:06d}.tif'.format(x, y)
 
             if os.path.exists(new_fn) and not overwrite:
                 continue
@@ -171,4 +171,4 @@ def create_training_data_window(filename, pvs, window_x=SVM_WINDOW_SIZE_X, windo
 if __name__ == '__main__':
 #    highlight_pvs('/home/franz/workspace/solar_panel_detection/train.txt')
 #    highlight_pvs('/home/franz/Schreibtisch/train.txt')
-    split_tif('/media/franz/Volume1/solar_panel_detector_data/production/Vienna_2017.tif')
+    split_tif('/home/franz/workspace/solar_panel_detection/data/use/Vienna_2017.tif')
