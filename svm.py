@@ -36,6 +36,8 @@ class SVM:
         self.conditioned_train_test_split(X, y, 0.2, 0.4)
 
     def create_training_data_image(self, filename, pvs, window_x=SVM_WINDOW_SIZE_X, window_y=SVM_WINDOW_SIZE_Y):
+        # TODO: add meaningful features
+
         img = Image.open(filename)
         img_array = np.array(img)
 
