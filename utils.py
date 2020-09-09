@@ -79,7 +79,7 @@ def highlight_all_pvs(training_file):
         plt.show()
 
 
-def highlight_pvs(filename, pvs):
+def highlight_pvs_center(filename, pvs):
     img = Image.open(filename)
     img_array = np.array(img)
 
@@ -87,6 +87,35 @@ def highlight_pvs(filename, pvs):
     for pv in pvs:
         rect_x, rect_y = calc_rectangle(x=pv.center_x, y=pv.center_y, h=pv.height, w=pv.width)
         plt.plot(rect_x, rect_y, color='red')
+
+    plt.show()
+
+
+def highlight_pvs_edges(filename, pvs):
+    img = Image.open(filename)
+    img_array = np.array(img)
+
+#    plt.imshow(img_array)
+
+    fig = plt.figure(figsize=[6, 6])
+    ax = fig.add_subplot(111)
+    ax.imshow(img_array)
+
+    for pv in pvs:
+        rect_x, rect_y = calc_rectangle(x_min=pv.x_min, y_min=pv.y_min, x_max=pv.x_max, y_max=pv.y_max)
+#        plt.plot(rect_x, rect_y, color='red')
+        ax.plot(rect_x, rect_y, color='red')
+
+        if pv.score:
+            plt.text(pv.x_min, pv.y_min - 2, '{:.2f}'.format(pv.score), color='red', fontsize=12)
+
+    ax.axes.get_xaxis().set_visible(False)
+    ax.axes.get_yaxis().set_visible(False)
+    ax.set_frame_on(False)
+    plt.savefig(os.path.splitext(os.path.basename(filename))[0] + '.pdf', dpi=400, bbox_inches='tight', pad_inches=0)
+
+#    plt.axis('off')
+#    plt.savefig(os.path.splitext(os.path.basename(filename))[0] + '.png',  bbox_inches='tight', pad_inches=0)
 
     plt.show()
 
@@ -168,7 +197,62 @@ def create_training_data_window(filename, pvs, window_x=SVM_WINDOW_SIZE_X, windo
     return X, Y
 
 
+def calc_intersection(A, B):
+    xmin_A, ymin_A, xmax_A, ymax_A = A
+    xmin_B, ymin_B, xmax_B, ymax_B = B
+
+    dx = min(xmax_A, xmax_B) - max(xmin_A, xmin_B)
+    dy = min(ymax_A, ymax_B) - max(ymin_A, ymin_B)
+
+    intersection = dx * dy
+    area_A = (xmax_A - xmin_A) * (ymax_A - ymin_A)
+    area_B = (xmax_B - xmin_B) * (ymax_B - ymin_B)
+    union = area_A + area_B - intersection
+
+    return intersection / union
+
+
+def calc_euclidean_distance(A, B):
+    xmin_A, ymin_A, xmax_A, ymax_A = A
+    xmin_B, ymin_B, xmax_B, ymax_B = B
+
+    center_x_A = (xmax_A + xmin_A) / 2
+    center_y_A = (ymax_A + ymin_A) / 2
+    center_x_B = (xmax_B + xmin_B) / 2
+    center_y_B = (ymax_B + ymin_B) / 2
+
+    return np.sqrt((center_x_A - center_x_B)**2 + (center_y_A - center_y_B)**2)
+
+
+def calc_true_positives(y_true, y_predicted):
+    def parse_values(values):
+        parsed = {}
+        for val in values:
+            split = val.strip().split(' ')
+            parsed[split[0]] = [[int(b) for b in box] for boxes in split[1:] for box in [boxes.strip(',0').split(',')]]
+        return parsed
+
+    y_true = parse_values(y_true)
+    y_predicted = parse_values(y_predicted)
+
+    true_positives = 0
+    total_number_objects = 0
+    for key in y_true:
+        yt = y_true[key]
+        yp = y_predicted[key]
+
+        total_number_objects += len(yt)
+
+        for i, _ in enumerate(yt):
+            for j, _ in enumerate(yp):
+                if calc_euclidean_distance(yt[i], yp[j]) < 25 and 1 > calc_intersection(yt[i], yp[j]) > 0.25:
+                    true_positives += 1
+
+    return true_positives, total_number_objects
+
+# TODO: implement https://www.pyimagesearch.com/2016/11/07/intersection-over-union-iou-for-object-detection/
+#                 https://medium.com/@jonathan_hui/map-mean-average-precision-for-object-detection-45c121a31173
+
+
 if __name__ == '__main__':
-#    highlight_pvs('/home/franz/workspace/solar_panel_detection/train.txt')
-#    highlight_pvs('/home/franz/Schreibtisch/train.txt')
     split_tif('/home/franz/workspace/solar_panel_detection/data/use/Vienna_2017.tif')

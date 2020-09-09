@@ -89,7 +89,7 @@ class YoloWrapper(YOLO):
         self.log = TensorBoard(YOLO_LOG_DIR + 'yolo_{:04d}_iterations'.format(self.max_iterations))
         self.checkpoints = ModelCheckpoint(YOLO_SAVE_DIR + 'yolo_weights.{epoch:02d}-{val_loss:.2f}.h5', monitor='val_loss', save_weights_only=True, save_best_only=True, period=2)
         self.reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=3, verbose=1)
-        self.early_stopping = EarlyStopping(monitor='val_loss', min_delta=0, patience=10, verbose=1)
+        self.early_stopping = EarlyStopping(monitor='val_loss', min_delta=0, patience=20, verbose=1)
 
     def _get_pretrained_weights(self, url=YOLO_PRETRAINED_WEIGHTS_URL, fn=YOLO_SAVE_DIR+'yolov3_darknet.weights'):
         def show_progress(count, block_size, total_size):
@@ -240,11 +240,12 @@ class YoloWrapper(YOLO):
 
         print('Found {} boxes for {}'.format(len(out_boxes), filename))
 
+        out_boxes = [[b[1], b[0], b[3], b[2]] for b in out_boxes]
         if len(out_boxes) > 0 and show:
             plt.imshow(image)
             for i, box in enumerate(out_boxes):
                 box = [int(b) for b in box]
-                rect_x, rect_y = utils.calc_rectangle(y_min=box[0], x_min=box[1], y_max=box[2], x_max=box[3])
+                rect_x, rect_y = utils.calc_rectangle(x_min=box[0], y_min=box[1], x_max=box[2], y_max=box[3])
                 plt.plot(rect_x, rect_y, color='red')
                 plt.text(box[3], box[2], '{:.2f}'.format(out_scores[i]), color='red')
 
@@ -255,10 +256,12 @@ class YoloWrapper(YOLO):
 
 if __name__ == '__main__':
     yolo = YoloWrapper()
-    yolo.train()
+    if not os.path.exists(YOLO_MODEL):
+        yolo.train()
     results = []
     for tif in glob(DATA_DIR_USE + '*.tif'):
         results.append(yolo.predict(tif))
     yolo.close_session()
 
-    pickle.dump(results, YOLO_SAVE_DIR + 'yolo_results.pickle')
+    with open(YOLO_SAVE_DIR + 'yolo_results.pickle', 'wb') as f:
+        pickle.dump(results, f)

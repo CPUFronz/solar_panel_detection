@@ -39,6 +39,7 @@ TRAINING_DATA_URLS = {
     'modesto.zip': 'https://ndownloader.figshare.com/articles/3385789/versions/1',
     'stockton.zip': 'https://ndownloader.figshare.com/articles/3385804/versions/1',
     'fresno.zip': 'https://ndownloader.figshare.com/articles/3385828/versions/1',
+    # 'oxndard.zip': 'https://ndownloader.figshare.com/articles/3385807/versions/1',
     'polygons.zip': 'https://ndownloader.figshare.com/articles/3385780/versions/3'
 }
 WMTS_LAYERS = ['lb', 'lb2016', 'lb2015', 'lb2014']
